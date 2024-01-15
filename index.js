@@ -1,4 +1,5 @@
 const express = require('express')
+const axios = require('axios')
 const app = express()
 const port = 3456
 const puppeteer = require('puppeteer'); // v20.7.4 or later
@@ -11,7 +12,7 @@ app.post('/kex', async (req, res) => {
   if (!req.body?.code) {
     console.log('ส่งค่า code [ ] มา');
   }
-  const browser = await puppeteer.launch({headless: true});
+  const browser = await puppeteer.launch({headless: false});
   const page = await browser.newPage();
   const timeout = 5000;
   page.setDefaultTimeout(timeout);
@@ -32,19 +33,6 @@ app.post('/kex', async (req, res) => {
       startWaitingForEvents();
       await targetPage.goto('https://th.kerryexpress.com/th/track/');
       await targetPage.setRequestInterception(true);
-      // Intercept network requests
-      await targetPage.on('request', (request) => {
-        request.continue();
-      });
-    
-      // Capture the response
-      await targetPage.on('response', async (response) => {
-        if (_.startsWith(response.url(), 'https://th.kerryexpress.com/th/track/?track=')) {
-          console.log(response);
-          const responseBody = await response.text();
-          console.log('Form submission response:', responseBody);
-        }
-      });
       await Promise.all(promises);
   }
   {
@@ -92,10 +80,17 @@ app.post('/kex', async (req, res) => {
 
   let currentUrl = await page.url();
   currentUrl = _.last(_.split(_.last(_.split(currentUrl, '?')), '='))
-  console.log(currentUrl);
+  const cookies = await page.cookies();
+  let response = await axios.post(`https://th.kerryexpress.com/th/track/?track=${currentUrl}`, { headers: {
+    'Cookie': _.join(_.map(cookies, v => `${v.name}=${v.value}`),'; ')
+  }});
+  
   // await page.waitForTimeout(10000)
   await browser.close();
-  res.send(currentUrl)
+  res.json({
+    url: `https://th.kerryexpress.com/th/track/?track=${currentUrl}`,
+    result: response?.data
+  })
 })
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
