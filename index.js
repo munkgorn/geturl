@@ -11,7 +11,7 @@ app.post('/kex', async (req, res) => {
   if (!req.body?.code) {
     console.log('ส่งค่า code [ ] มา');
   }
-  const browser = await puppeteer.launch({headless: false});
+  const browser = await puppeteer.launch({headless: true});
   const page = await browser.newPage();
   const timeout = 5000;
   page.setDefaultTimeout(timeout);
@@ -32,6 +32,19 @@ app.post('/kex', async (req, res) => {
       startWaitingForEvents();
       await targetPage.goto('https://th.kerryexpress.com/th/track/');
       await targetPage.setRequestInterception(true);
+      // Intercept network requests
+      await targetPage.on('request', (request) => {
+        request.continue();
+      });
+    
+      // Capture the response
+      await targetPage.on('response', async (response) => {
+        if (_.startsWith(response.url(), 'https://th.kerryexpress.com/th/track/?track=')) {
+          console.log(response);
+          const responseBody = await response.text();
+          console.log('Form submission response:', responseBody);
+        }
+      });
       await Promise.all(promises);
   }
   {
@@ -81,23 +94,8 @@ app.post('/kex', async (req, res) => {
   currentUrl = _.last(_.split(_.last(_.split(currentUrl, '?')), '='))
   console.log(currentUrl);
   // await page.waitForTimeout(10000)
-  // Intercept network requests
-  page.on('request', (request) => {
-    request.continue();
-  });
-
-  // Capture the response
-  page.on('response', async (response) => {
-    // Check if the response corresponds to the form submission
-    if (response.url() === 'https://th.kerryexpress.com/th/track/') {
-      const responseBody = await response.text();
-      console.log('Form submission response:', responseBody);
-
-      // You can further process or manipulate the response here
-    }
-  });
   await browser.close();
-  res.send('Hello World!')
+  res.send(currentUrl)
 })
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`)
